@@ -311,6 +311,22 @@ fn format_permissions_switch_report(previous: &str, next: &str) -> String {
     )
 }
 
+fn format_cost_report(usage: TokenUsage) -> String {
+    format!(
+        "Cost
+  Input tokens     {}
+  Output tokens    {}
+  Cache create     {}
+  Cache read       {}
+  Total tokens     {}",
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.cache_creation_input_tokens,
+        usage.cache_read_input_tokens,
+        usage.total_tokens(),
+    )
+}
+
 fn run_resume_command(
     session_path: &Path,
     session: &Session,
@@ -383,14 +399,7 @@ fn run_resume_command(
             let usage = UsageTracker::from_session(session).cumulative_usage();
             Ok(ResumeCommandOutcome {
                 session: session.clone(),
-                message: Some(format!(
-                    "cost: input_tokens={} output_tokens={} cache_creation_tokens={} cache_read_tokens={} total_tokens={}",
-                    usage.input_tokens,
-                    usage.output_tokens,
-                    usage.cache_creation_input_tokens,
-                    usage.cache_read_input_tokens,
-                    usage.total_tokens(),
-                )),
+                message: Some(format_cost_report(usage)),
             })
         }
         SlashCommand::Config => Ok(ResumeCommandOutcome {
@@ -620,14 +629,7 @@ impl LiveCli {
 
     fn print_cost(&self) {
         let cumulative = self.runtime.usage().cumulative_usage();
-        println!(
-            "cost: input_tokens={} output_tokens={} cache_creation_tokens={} cache_read_tokens={} total_tokens={}",
-            cumulative.input_tokens,
-            cumulative.output_tokens,
-            cumulative.cache_creation_input_tokens,
-            cumulative.cache_read_input_tokens,
-            cumulative.total_tokens(),
-        );
+        println!("{}", format_cost_report(cumulative));
     }
 
     fn resume_session(
@@ -1258,10 +1260,11 @@ fn print_help() {
 #[cfg(test)]
 mod tests {
     use super::{
-        format_model_report, format_model_switch_report, format_permissions_report,
-        format_permissions_switch_report, format_status_report, normalize_permission_mode,
-        parse_args, render_init_claude_md, render_repl_help, resume_supported_slash_commands,
-        status_context, CliAction, SlashCommand, StatusUsage, DEFAULT_MODEL,
+        format_cost_report, format_model_report, format_model_switch_report,
+        format_permissions_report, format_permissions_switch_report, format_status_report,
+        normalize_permission_mode, parse_args, render_init_claude_md, render_repl_help,
+        resume_supported_slash_commands, status_context, CliAction, SlashCommand, StatusUsage,
+        DEFAULT_MODEL,
     };
     use runtime::{ContentBlock, ConversationMessage, MessageRole};
     use std::path::{Path, PathBuf};
@@ -1374,6 +1377,22 @@ mod tests {
             names,
             vec!["help", "status", "compact", "clear", "cost", "config", "memory", "init",]
         );
+    }
+
+    #[test]
+    fn cost_report_uses_sectioned_layout() {
+        let report = format_cost_report(runtime::TokenUsage {
+            input_tokens: 20,
+            output_tokens: 8,
+            cache_creation_input_tokens: 3,
+            cache_read_input_tokens: 1,
+        });
+        assert!(report.contains("Cost"));
+        assert!(report.contains("Input tokens     20"));
+        assert!(report.contains("Output tokens    8"));
+        assert!(report.contains("Cache create     3"));
+        assert!(report.contains("Cache read       1"));
+        assert!(report.contains("Total tokens     32"));
     }
 
     #[test]
